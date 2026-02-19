@@ -1,0 +1,9 @@
+telethon
+py-tgcalls
+yt-dlp
+aiohttp
+Pillow
+cryptg
+pycryptodome
+numpy
+ffmpeg-python
