@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Bot files
+*.session
+*.session-journal
+*.mp3
+*.ogg
+*.wav
+*.m4a
+*.jpg
+*.jpeg
+*.png
+thumb_*.jpg
+voice_*.mp3
+voice_*.ogg
+
+# Logs
+*.log
+bot.log
+assistant.log
+
+# Railway
+.railway/
+*.railway
+
+# Environment
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
