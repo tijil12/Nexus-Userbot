@@ -31,6 +31,7 @@ import subprocess
 BOT_TOKEN = "8577526430:AAF3V6hMEoezfLWZ47YDSsrZlAwA8WMZY0Y"
 API_ID = 30191201
 API_HASH = "5c87a8808e935cc3d97958d0bb24ff1f"
+COOKIES_FILE = "cookies.txt"
 ASSISTANT_SESSION = "1BVtsOKoBu2m6t9kIzAreFVIjWQXldBPJOS_nDiq7Kyp0P8vBtOfrjIjRaBMJNDEGK1HcF6pdH7C3EzMULEcrKxMpi42eTFoqYvzFGR4JIdDHTCh2F2hrLpOswumw3Imlyk5uL4a3gTBP24QLMVvj7TFpcO71KQ4CeUW8ok8BeXkedQTkLk2H9cep4WjvOqTVphVDrbuJlhgcDD90fv7eRv3_F7JUFtrmxpksaQJUJQjM3SGjLTuRjgFHiAnEctVYHsxZ0ee2_oJE0AO_tbupxXo3TJ8xsA_lcis-lcRSbSBuDUG6LLY1atBNgw0S7xOv006jeETUcs7ORikuZFsEwSwTp4A7fjQ="
 OWNER_ID = 8547249321
 UPDATES_CHANNEL = "your_updates_channel"  # Bina @ ke
@@ -257,6 +258,7 @@ async def extract_audio(query):
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
+        'cookiefile': COOKIES_FILE,
         'extract_flat': False,
     }
     
@@ -303,6 +305,7 @@ async def extract_video(query):
         'format': 'best[height<=720]/best',
         'quiet': True,
         'no_warnings': True,
+        'cookiefile': COOKIES_FILE,
         'noplaylist': True,
     }
     
