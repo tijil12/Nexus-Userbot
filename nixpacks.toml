@@ -1,8 +1,12 @@
 [phases.setup]
-nixPkgs = ["ffmpeg"]
+nixPkgs = ["ffmpeg", "python311", "gcc"]
 
-[phases.build]
-cmds = ["pip install -U pip", "pip install -r requirements.txt"]
+[phases.install]
+cmds = [
+  "pip install poetry",
+  "poetry config virtualenvs.create false",
+  "poetry install --no-interaction --no-ansi"
+]
 
 [start]
 cmd = "python main.py"
