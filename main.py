@@ -28,16 +28,16 @@ from telethon.tl.types import InputPeerEmpty
 import subprocess
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8237143637:AAG7sW21w5U_F4ipvvZWzEm0UKQjoVGp_gQ"
+BOT_TOKEN = "8493611261:AAHQNQnfmZwhuVe16TDTuve7r8cqGTQmWvg"
 API_ID = 30191201
 API_HASH = "5c87a8808e935cc3d97958d0bb24ff1f"
 COOKIES_FILE = "cookies.txt"
 ASSISTANT_SESSION = "1BVtsOKoBu2m6t9kIzAreFVIjWQXldBPJOS_nDiq7Kyp0P8vBtOfrjIjRaBMJNDEGK1HcF6pdH7C3EzMULEcrKxMpi42eTFoqYvzFGR4JIdDHTCh2F2hrLpOswumw3Imlyk5uL4a3gTBP24QLMVvj7TFpcO71KQ4CeUW8ok8BeXkedQTkLk2H9cep4WjvOqTVphVDrbuJlhgcDD90fv7eRv3_F7JUFtrmxpksaQJUJQjM3SGjLTuRjgFHiAnEctVYHsxZ0ee2_oJE0AO_tbupxXo3TJ8xsA_lcis-lcRSbSBuDUG6LLY1atBNgw0S7xOv006jeETUcs7ORikuZFsEwSwTp4A7fjQ="
-OWNER_ID = 8012308944
-UPDATES_CHANNEL = "BLAZE_XMUSIC"  # Bina @ ke
+OWNER_ID = 5774811323
+UPDATES_CHANNEL = "ASUNA_XMUSIC_UPDATES"  # Bina @ ke
 
 # Welcome image URL
-WELCOME_IMAGE_URL = "https://files.catbox.moe/p6137z.png"
+WELCOME_IMAGE_URL = "https://files.catbox.moe/x45it4.jpg"
 
 # ================= LOGGING =================
 logging.basicConfig(
@@ -603,7 +603,7 @@ async def message_handler(event):
         user = await event.get_sender()
         
         caption = f"""
-✨ **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ʙʟᴀᴢᴇ ꭙ ᴍᴜꜱɪᴄ ʙᴏᴛ** ✨
+✨ **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ˹𝚨𝛔𝛖𝛎𝛂 ꭙ 𝐌ᴜꜱɪᴄ ♪˼ ʙᴏᴛ** ✨
 
 ⟡➣ **ʜᴇʏ** [{get_display_name(user)}](tg://user?id={user.id}) ❤️
 
@@ -614,7 +614,7 @@ async def message_handler(event):
         """
         
         buttons = [
-            [Button.url("⟡➣ 𝙾𝚠𝚗𝚎𝚛", f"https://t.me/blaze_xs0ul"),
+            [Button.url("⟡➣ 𝙾𝚠𝚗𝚎𝚛", f"https://t.me/god_knows_0"),
              Button.url("➕ 𝙰𝚍𝚍 𝙼𝚎", f"https://t.me/{(await event.client.get_me()).username}?startgroup=true")],
             [Button.inline("⟡➣ 𝙷𝚎𝚕𝚙", data="help"),
              Button.url("⟡➣ 𝚄𝚙𝚍𝚊𝚝𝚎𝚜", f"https://t.me/{UPDATES_CHANNEL}")]
