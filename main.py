@@ -254,85 +254,55 @@ async def download_voice_message(event):
 # ================= EXTRACT AUDIO/VIDEO =================
 async def extract_audio(query):
     ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',  # Multiple format fallback
+        'format': 'bestaudio/best',
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
         'cookiefile': COOKIES_FILE,
-        'extract_flat': False,
-        'ignoreerrors': True,  # Ignore format errors
-        'no_color': True,
-        'geo_bypass': True,  # Bypass geo-restrictions
-        'geo_bypass_country': 'US',  # Fallback country
-        'socket_timeout': 30,  # Increase timeout
-        'retries': 10,  # Retry on failure
-        'fragment_retries': 10,
-        'skip_unavailable_fragments': True,
     }
-    
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+            # Direct URL ya search
             if query.startswith(('http://', 'https://')):
                 info = ydl.extract_info(query, download=False)
             else:
-                results = ydl.extract_info(f"ytsearch:{query}", download=False)
+                results = ydl.extract_info(f"ytsearch1:{query}", download=False)
                 if not results or 'entries' not in results or not results['entries']:
                     return None
                 info = results['entries'][0]
-            
-            # Better URL extraction logic
-            url = None
-            
-            # Method 1: Direct URL
-            if info.get('url'):
-                url = info['url']
-            
-            # Method 2: Check formats
-            elif 'formats' in info:
-                # First try: Best audio with URL
-                for fmt in info['formats']:
-                    if fmt.get('acodec') != 'none' and fmt.get('url') and fmt.get('vcodec') == 'none':
-                        url = fmt['url']
-                        break
-                
-                # Second try: Any format with audio and URL
-                if not url:
-                    for fmt in info['formats']:
-                        if fmt.get('acodec') != 'none' and fmt.get('url'):
-                            url = fmt['url']
-                            break
-                
-                # Third try: Any format with URL
-                if not url:
-                    for fmt in info['formats']:
-                        if fmt.get('url'):
-                            url = fmt['url']
-                            break
-            
-            # Method 3: Try to get from requested_formats
-            if not url and 'requested_formats' in info:
-                for fmt in info['requested_formats']:
-                    if fmt.get('url'):
-                        url = fmt['url']
-                        break
-            
-            if not url:
-                logger.error(f"No URL found for: {query}")
+
+            if not info:
                 return None
-            
-            # Duration handling
-            duration = info.get('duration', 0)
-            if duration == 0 and 'requested_formats' in info:
-                # Try to get duration from formats
-                for fmt in info['requested_formats']:
-                    if fmt.get('duration'):
-                        duration = fmt['duration']
-                        break
-            
+
+            # --------- BEST AUDIO MANUAL SELECT ---------
+            url = None
+
+            if 'formats' in info:
+                audio_formats = [
+                    f for f in info['formats']
+                    if f.get('acodec') != 'none' and f.get('vcodec') == 'none'
+                ]
+
+                if audio_formats:
+                    # Highest bitrate audio select
+                    best_audio = max(audio_formats, key=lambda x: x.get('abr') or 0)
+                    url = best_audio.get('url')
+
+            # fallback
+            if not url:
+                url = info.get('url')
+
+            if not url:
+                return None
+
+            # Duration formatting
+            duration = info.get('duration') or 0
             minutes = duration // 60
             seconds = duration % 60
             duration_str = f"{minutes}:{seconds:02d}"
-            
+
             return {
                 'url': url,
                 'title': info.get('title', 'Unknown'),
@@ -342,6 +312,7 @@ async def extract_audio(query):
                 'uploader': info.get('uploader', 'Unknown'),
                 'is_local': False
             }
+
     except Exception as e:
         logger.error(f"Extract audio error: {e}")
         return None
@@ -349,74 +320,58 @@ async def extract_audio(query):
 
 async def extract_video(query):
     ydl_opts = {
-        'format': 'best[height<=720][ext=mp4]/best[height<=720]/best',  # Multiple format fallback
+        'format': 'bestvideo[height<=720]+bestaudio/best',
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': COOKIES_FILE,
         'noplaylist': True,
-        'ignoreerrors': True,
-        'geo_bypass': True,
-        'geo_bypass_country': 'US',
-        'socket_timeout': 30,
-        'retries': 10,
-        'fragment_retries': 10,
+        'cookiefile': COOKIES_FILE,
     }
-    
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+            # Direct URL ya search
             if query.startswith(('http://', 'https://')):
                 info = ydl.extract_info(query, download=False)
             else:
-                results = ydl.extract_info(f"ytsearch:{query}", download=False)
+                results = ydl.extract_info(f"ytsearch1:{query}", download=False)
                 if not results or 'entries' not in results or not results['entries']:
                     return None
                 info = results['entries'][0]
-            
-            # Better URL extraction for video
-            url = None
-            
-            # Method 1: Direct URL
-            if info.get('url'):
-                url = info['url']
-            
-            # Method 2: Check formats
-            elif 'formats' in info:
-                # Try best video format
-                for fmt in info['formats']:
-                    if fmt.get('vcodec') != 'none' and fmt.get('url') and fmt.get('height', 0) <= 720:
-                        url = fmt['url']
-                        break
-                
-                # Any video format
-                if not url:
-                    for fmt in info['formats']:
-                        if fmt.get('vcodec') != 'none' and fmt.get('url'):
-                            url = fmt['url']
-                            break
-                
-                # Any format with URL
-                if not url:
-                    for fmt in info['formats']:
-                        if fmt.get('url'):
-                            url = fmt['url']
-                            break
-            
-            # Method 3: Requested formats
-            if not url and 'requested_formats' in info:
-                for fmt in info['requested_formats']:
-                    if fmt.get('url'):
-                        url = fmt['url']
-                        break
-            
-            if not url:
-                logger.error(f"No video URL found for: {query}")
+
+            if not info:
                 return None
-            
-            duration = info.get('duration', 0)
+
+            # --------- VIDEO URL HANDLE ---------
+            url = info.get('url')
+
+            # Agar combined stream nahi mila to manual select
+            if not url and 'formats' in info:
+                video_formats = [
+                    f for f in info['formats']
+                    if f.get('vcodec') != 'none'
+                ]
+
+                if video_formats:
+                    # 720p tak best choose karo
+                    video_formats = [
+                        f for f in video_formats
+                        if (f.get('height') or 0) <= 720
+                    ]
+
+                    if video_formats:
+                        best_video = max(video_formats, key=lambda x: x.get('height') or 0)
+                        url = best_video.get('url')
+
+            if not url:
+                return None
+
+            # Duration formatting
+            duration = info.get('duration') or 0
             minutes = duration // 60
             seconds = duration % 60
             duration_str = f"{minutes}:{seconds:02d}"
-            
+
             return {
                 'url': url,
                 'title': info.get('title', 'Unknown'),
@@ -426,6 +381,7 @@ async def extract_video(query):
                 'uploader': info.get('uploader', 'Unknown'),
                 'is_local': False
             }
+
     except Exception as e:
         logger.error(f"Extract video error: {e}")
         return None
