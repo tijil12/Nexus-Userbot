@@ -37,7 +37,7 @@ OWNER_ID = 5774811323
 UPDATES_CHANNEL = "ASUNA_XMUSIC_UPDATES"  # Bina @ ke
 
 # Welcome image URL
-WELCOME_IMAGE_URL = "https://files.catbox.moe/x45it4.jpg"
+WELCOME_IMAGE_URL = "https://myimgs.org/storage/images/17832/asuna.png"
 
 # ================= LOGGING =================
 logging.basicConfig(
