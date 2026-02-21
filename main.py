@@ -723,6 +723,7 @@ async def auto_next(chat_id, duration):
 
     player = await get_player(chat_id)
 
+    # Agar loop on hai to current song dobara chalao
     if player.loop and player.current:
         await play_song(
             chat_id,
@@ -731,6 +732,7 @@ async def auto_next(chat_id, duration):
         )
         return
 
+    # Agar queue mein song hai to next chalao
     if player.queue:
         next_song = player.queue.pop(0)
         await play_song(
@@ -739,23 +741,25 @@ async def auto_next(chat_id, duration):
             next_song.get("is_video", False)
         )
     else:
-        # Cleanup local file
-        if player.current:
-            file_path = player.current.get("file_path")
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except:
-                    pass
+        # ⭐ YAHAN CHANGE - AUTO END HOGA AUR MESSAGE BHI AAYEGA ⭐
+        
+        # Current song ka file clean karo agar local hai
+        if player.current and player.current.get('is_local', False):
+            try:
+                os.remove(player.current['file_path'])
+            except:
+                pass
 
         player.current = None
 
+        # Voice chat leave karo (auto end)
         try:
             await call.leave_call(chat_id)
-        except:
-            pass
+            logger.info(f"Auto-ended in chat {chat_id} - queue empty")
+        except Exception as e:
+            logger.error(f"Auto leave error: {e}")
 
-        # Delete control message
+        # Control message delete karo
         if player.control_message_id and player.control_chat_id:
             try:
                 await bot.delete_messages(
@@ -767,6 +771,15 @@ async def auto_next(chat_id, duration):
 
         player.control_message_id = None
         player.control_chat_id = None
+        
+        # ✅ GROUP ME MESSAGE BHEJO
+        try:
+            await bot.send_message(
+                chat_id,
+                "**🎵 ǫᴜᴇᴜᴇ ғɪɴɪsʜᴇᴅ!**\n\n**ɴᴏ ᴍᴏʀᴇ sᴏɴɢs ɪɴ ǫᴜᴇᴜᴇ, ʟᴇғᴛ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ.**"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send auto-end message: {e}")
 
 # ================= COMMAND CHECKER =================
 def is_command(text, command):
