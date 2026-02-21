@@ -492,6 +492,7 @@ async def download_audio(query):
             "preferredcodec": "mp3",
             "preferredquality": "192",
         }],
+        "cookiefile": COOKIES_FILE,
     }
 
     try:
@@ -538,6 +539,7 @@ async def download_video(query):
         "no_warnings": True,
         "noplaylist": True,
         "geo_bypass": True,
+        "cookiefile": COOKIES_FILE,
         "geo_bypass_country": "IN",
     }
 
