@@ -4,11 +4,8 @@ import aiohttp
 import yt_dlp
 from telethon import TelegramClient, events, Button
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.errors import ChatAdminRequiredError
-from telethon.tl.functions.channels import InviteToChannelRequest
 from telethon.errors import UserAlreadyParticipantError, InviteHashExpiredError, FloodWaitError
-from telethon.tl.functions.messages import ExportChatInviteRequest
+from telethon.tl.functions.channels import InviteToChannelRequest, ExportChatInviteRequest
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument, InputMessagesFilterEmpty
 from telethon.utils import get_display_name
@@ -492,7 +489,6 @@ async def download_audio(query):
             "preferredcodec": "mp3",
             "preferredquality": "192",
         }],
-        "cookiefile": COOKIES_FILE,
     }
 
     try:
@@ -539,7 +535,6 @@ async def download_video(query):
         "no_warnings": True,
         "noplaylist": True,
         "geo_bypass": True,
-        "cookiefile": COOKIES_FILE,
         "geo_bypass_country": "IN",
     }
 
@@ -725,7 +720,6 @@ async def auto_next(chat_id, duration):
 
     player = await get_player(chat_id)
 
-    # Agar loop on hai to current song dobara chalao
     if player.loop and player.current:
         await play_song(
             chat_id,
@@ -734,7 +728,6 @@ async def auto_next(chat_id, duration):
         )
         return
 
-    # Agar queue mein song hai to next chalao
     if player.queue:
         next_song = player.queue.pop(0)
         await play_song(
@@ -743,25 +736,23 @@ async def auto_next(chat_id, duration):
             next_song.get("is_video", False)
         )
     else:
-        # ⭐ YAHAN CHANGE - AUTO END HOGA AUR MESSAGE BHI AAYEGA ⭐
-        
-        # Current song ka file clean karo agar local hai
-        if player.current and player.current.get('is_local', False):
-            try:
-                os.remove(player.current['file_path'])
-            except:
-                pass
+        # Cleanup local file
+        if player.current:
+            file_path = player.current.get("file_path")
+            if file_path and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
 
         player.current = None
 
-        # Voice chat leave karo (auto end)
         try:
             await call.leave_call(chat_id)
-            logger.info(f"Auto-ended in chat {chat_id} - queue empty")
-        except Exception as e:
-            logger.error(f"Auto leave error: {e}")
+        except:
+            pass
 
-        # Control message delete karo
+        # Delete control message
         if player.control_message_id and player.control_chat_id:
             try:
                 await bot.delete_messages(
@@ -773,15 +764,6 @@ async def auto_next(chat_id, duration):
 
         player.control_message_id = None
         player.control_chat_id = None
-        
-        # ✅ GROUP ME MESSAGE BHEJO
-        try:
-            await bot.send_message(
-                chat_id,
-                "**🎵 ǫᴜᴇᴜᴇ ғɪɴɪsʜᴇᴅ!**\n\n**ɴᴏ ᴍᴏʀᴇ sᴏɴɢs ɪɴ ǫᴜᴇᴜᴇ, ʟᴇғᴛ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ.**"
-            )
-        except Exception as e:
-            logger.error(f"Failed to send auto-end message: {e}")
 
 # ================= COMMAND CHECKER =================
 def is_command(text, command):
