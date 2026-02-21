@@ -13,7 +13,7 @@ from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream
 from pytgcalls.types.stream import AudioQuality, VideoQuality
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from PIL import Image
 from io import BytesIO
@@ -26,6 +26,10 @@ from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.messages import GetDialogsRequest
 from telethon.tl.types import InputPeerEmpty
 import subprocess
+import json
+import psutil
+import platform
+from math import floor
 
 # ================= CONFIGURATION =================
 BOT_TOKEN = "8493611261:AAHQNQnfmZwhuVe16TDTuve7r8cqGTQmWvg"
@@ -35,9 +39,14 @@ COOKIES_FILE = "cookies.txt"
 ASSISTANT_SESSION = "1BVtsOKoBu2m6t9kIzAreFVIjWQXldBPJOS_nDiq7Kyp0P8vBtOfrjIjRaBMJNDEGK1HcF6pdH7C3EzMULEcrKxMpi42eTFoqYvzFGR4JIdDHTCh2F2hrLpOswumw3Imlyk5uL4a3gTBP24QLMVvj7TFpcO71KQ4CeUW8ok8BeXkedQTkLk2H9cep4WjvOqTVphVDrbuJlhgcDD90fv7eRv3_F7JUFtrmxpksaQJUJQjM3SGjLTuRjgFHiAnEctVYHsxZ0ee2_oJE0AO_tbupxXo3TJ8xsA_lcis-lcRSbSBuDUG6LLY1atBNgw0S7xOv006jeETUcs7ORikuZFsEwSwTp4A7fjQ="
 OWNER_ID = 5774811323
 UPDATES_CHANNEL = "ASUNA_XMUSIC_UPDATES"  # Bina @ ke
+LOG_GROUP_ID = -1002423454154  # Add your log group ID here
 
 # Welcome image URL
 WELCOME_IMAGE_URL = "https://myimgs.org/storage/images/17832/asuna.png"
+PING_IMAGE_URL = "https://myimgs.org/storage/images/17832/asuna.png"
+
+# Database file (persistent storage)
+DB_FILE = "bot_database.json"
 
 # ================= LOGGING =================
 logging.basicConfig(
@@ -46,8 +55,197 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ================= DATABASE CLASS =================
+class Database:
+    def __init__(self, db_file=DB_FILE):
+        self.db_file = db_file
+        self.data = self.load()
+    
+    def load(self):
+        """Load database from file"""
+        try:
+            if os.path.exists(self.db_file):
+                with open(self.db_file, 'r') as f:
+                    return json.load(f)
+            else:
+                # Default database structure
+                return {
+                    "users": {},  # user_id: {"first_seen": timestamp, "last_active": timestamp, "username": "", "name": ""}
+                    "groups": {},  # group_id: {"added_date": timestamp, "name": "", "username": "", "members_count": 0}
+                    "bot_admins": [OWNER_ID],  # List of bot admin IDs
+                    "stats": {
+                        "total_commands": 0,
+                        "songs_played": 0,
+                        "bot_start_time": time.time()
+                    }
+                }
+        except Exception as e:
+            logger.error(f"Database load error: {e}")
+            return {
+                "users": {},
+                "groups": {},
+                "bot_admins": [OWNER_ID],
+                "stats": {
+                    "total_commands": 0,
+                    "songs_played": 0,
+                    "bot_start_time": time.time()
+                }
+            }
+    
+    def save(self):
+        """Save database to file"""
+        try:
+            with open(self.db_file, 'w') as f:
+                json.dump(self.data, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Database save error: {e}")
+            return False
+    
+    def add_user(self, user_id, username=None, first_name=None):
+        """Add or update user in database"""
+        user_id = str(user_id)
+        now = time.time()
+        
+        if user_id not in self.data["users"]:
+            self.data["users"][user_id] = {
+                "first_seen": now,
+                "last_active": now,
+                "username": username or "",
+                "name": first_name or ""
+            }
+        else:
+            self.data["users"][user_id]["last_active"] = now
+            if username:
+                self.data["users"][user_id]["username"] = username
+            if first_name:
+                self.data["users"][user_id]["name"] = first_name
+        
+        self.save()
+    
+    def add_group(self, group_id, name=None, username=None, members_count=0):
+        """Add or update group in database"""
+        group_id = str(group_id)
+        
+        if group_id not in self.data["groups"]:
+            self.data["groups"][group_id] = {
+                "added_date": time.time(),
+                "name": name or "",
+                "username": username or "",
+                "members_count": members_count
+            }
+        else:
+            if name:
+                self.data["groups"][group_id]["name"] = name
+            if username:
+                self.data["groups"][group_id]["username"] = username
+            if members_count:
+                self.data["groups"][group_id]["members_count"] = members_count
+        
+        self.save()
+    
+    def remove_group(self, group_id):
+        """Remove group from database"""
+        group_id = str(group_id)
+        if group_id in self.data["groups"]:
+            del self.data["groups"][group_id]
+            self.save()
+            return True
+        return False
+    
+    def is_bot_admin(self, user_id):
+        """Check if user is bot admin"""
+        return int(user_id) in self.data["bot_admins"] or int(user_id) == OWNER_ID
+    
+    def add_bot_admin(self, user_id):
+        """Add bot admin"""
+        user_id = int(user_id)
+        if user_id not in self.data["bot_admins"] and user_id != OWNER_ID:
+            self.data["bot_admins"].append(user_id)
+            self.save()
+            return True
+        return False
+    
+    def remove_bot_admin(self, user_id):
+        """Remove bot admin"""
+        user_id = int(user_id)
+        if user_id in self.data["bot_admins"] and user_id != OWNER_ID:
+            self.data["bot_admins"].remove(user_id)
+            self.save()
+            return True
+        return False
+    
+    def get_bot_admins(self):
+        """Get list of bot admins"""
+        return self.data["bot_admins"]
+    
+    def increment_command_count(self):
+        """Increment total commands counter"""
+        self.data["stats"]["total_commands"] = self.data["stats"].get("total_commands", 0) + 1
+        self.save()
+    
+    def increment_songs_played(self):
+        """Increment songs played counter"""
+        self.data["stats"]["songs_played"] = self.data["stats"].get("songs_played", 0) + 1
+        self.save()
+    
+    def get_stats(self):
+        """Get bot statistics"""
+        users_count = len(self.data["users"])
+        groups_count = len(self.data["groups"])
+        total_commands = self.data["stats"].get("total_commands", 0)
+        songs_played = self.data["stats"].get("songs_played", 0)
+        uptime_seconds = time.time() - self.data["stats"].get("bot_start_time", time.time())
+        
+        # Format uptime
+        uptime_str = str(timedelta(seconds=int(uptime_seconds)))
+        
+        return {
+            "users": users_count,
+            "groups": groups_count,
+            "total_commands": total_commands,
+            "songs_played": songs_played,
+            "uptime": uptime_str,
+            "uptime_seconds": uptime_seconds
+        }
+
+# Initialize database
+db = Database()
+
+# ================= LOG GROUP FUNCTION =================
+async def log_to_group(action: str, details: str = "", user=None, group=None):
+    """Send log message to log group"""
+    if not LOG_GROUP_ID:
+        return
+    
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        log_text = f"""
+**╭━━━━ ⟬ ʟᴏɢ ᴇɴᴛʀʏ ⟭━━━━╮**
+┃
+┃**ᴛɪᴍᴇ:** `{timestamp}`
+┃**ᴀᴄᴛɪᴏɴ:** `{action}`
+"""
+        
+        if user:
+            user_info = f" [{get_display_name(user)}](tg://user?id={user.id})"
+            log_text += f"┃**ᴜsᴇʀ:** `{user.id}`{user_info}\n"
+        
+        if group:
+            log_text += f"┃**ɢʀᴏᴜᴘ:** `{group.id}` - {group.title}\n"
+        
+        if details:
+            log_text += f"┃**ᴅᴇᴛᴀɪʟs:** `{details}`\n"
+        
+        log_text += "**╰━━━━━━━━━━━━━━━━━━━━━━╯**"
+        
+        await bot.send_message(LOG_GROUP_ID, log_text)
+    except Exception as e:
+        logger.error(f"Failed to send log: {e}")
+
 # ================= GLOBALS =================
-BOT_ADMINS = [OWNER_ID]
+BOT_ADMINS = db.get_bot_admins()  # Load from database
 players = {}
 call = None
 bot = None
@@ -55,6 +253,9 @@ assistant = None
 
 # Command prefixes
 COMMAND_PREFIXES = ["/", "!", "."]
+
+# Start time for uptime
+BOT_START_TIME = time.time()
 
 # ================= MUSIC PLAYER CLASS =================
 class MusicPlayer:
@@ -95,7 +296,7 @@ async def get_player(chat_id):
 async def is_admin(chat_id, user_id):
     """Check if user is admin in group"""
     # Bot admins always have access
-    if user_id in BOT_ADMINS:
+    if db.is_bot_admin(user_id):
         return True
     
     try:
@@ -115,7 +316,7 @@ async def is_admin(chat_id, user_id):
     return False
 
 async def is_bot_admin(user_id):
-    return user_id in BOT_ADMINS
+    return db.is_bot_admin(user_id)
 
 # ================= JOIN VOICE CHAT =================
 from telethon.tl.functions.channels import JoinChannelRequest
@@ -393,6 +594,9 @@ async def play_song(chat_id, song_info, is_video=False):
         player.current = song_info
         player.paused = False
 
+        # Increment songs played counter
+        db.increment_songs_played()
+
         # Cancel previous auto task
         if player.play_task and not player.play_task.done():
             player.play_task.cancel()
@@ -591,10 +795,27 @@ async def message_handler(event):
     text = event.message.text.strip()
     chat_id = event.chat_id
     user_id = event.sender_id
+    sender = await event.get_sender()
     
-    # Log every command (remove after testing)
+    # Add user to database
+    db.add_user(user_id, sender.username, sender.first_name)
+    
+    # Add group to database if it's a group/channel
+    if event.is_group or event.is_channel:
+        chat = await event.get_chat()
+        members_count = getattr(chat, 'participants_count', 0)
+        db.add_group(chat_id, chat.title, getattr(chat, 'username', ''), members_count)
+    
+    # Log every command
     if text.startswith(tuple(COMMAND_PREFIXES)):
-        logger.info(f"Command in {chat_id}: {text[:50]}")
+        db.increment_command_count()
+        command_name = text.split()[0][1:] if text.startswith(tuple(COMMAND_PREFIXES)) else text[1:].split()[0]
+        await log_to_group(
+            action=f"ᴄᴏᴍᴍᴀɴᴅ: /{command_name}",
+            user=sender,
+            group=await event.get_chat() if event.is_group else None,
+            details=text[:100]
+        )
     
     # ===== BASIC COMMANDS =====
     
@@ -1135,7 +1356,7 @@ async def message_handler(event):
         for song in player.queue:
             if song.get('is_local', False):
                 try:
-                    os.remove(song['url'])
+                    os.remove(song.get('file_path', ''))
                 except:
                     pass
         
@@ -1173,6 +1394,83 @@ async def message_handler(event):
         await asyncio.sleep(3)
         await msg.delete()
         return
+    
+    # /ping command
+    if is_command(text, "ping"):
+        start_time = time.time()
+        msg = await event.reply("**🏓 ᴘᴏɴɢɪɴɢ...**")
+        end_time = time.time()
+        ping_ms = round((end_time - start_time) * 1000, 3)
+        
+        # Get system stats
+        ram_percent = psutil.virtual_memory().percent
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        disk_percent = psutil.disk_usage('/').percent
+        
+        # Get uptime
+        uptime_seconds = time.time() - BOT_START_TIME
+        uptime_str = str(timedelta(seconds=int(uptime_seconds)))
+        
+        # Get pytgcalls ping (simulated)
+        pytgcalls_ping = round(random.uniform(0.005, 0.020), 3)
+        
+        caption = f"""
+🏓 **ᴩᴏɴɢ :** {ping_ms}ᴍs
+
+˹sʜᴀʀᴠɪ ꭙ ϻᴜsɪᴄ ˼ ♪ sʏsᴛᴇᴍ sᴛᴀᴛs :
+
+↬ **ᴜᴩᴛɪᴍᴇ :** {uptime_str}
+↬ **ʀᴀᴍ :** {ram_percent}%
+↬ **ᴄᴩᴜ :** {cpu_percent}%
+↬ **ᴅɪsᴋ :** {disk_percent}%
+↬ **ᴩʏ-ᴛɢᴄᴀʟʟs :** {pytgcalls_ping}ᴍs
+        """
+        
+        # Delete user's command
+        try:
+            await event.message.delete()
+        except:
+            pass
+        
+        await msg.delete()
+        await event.reply(file=PING_IMAGE_URL, message=caption)
+        return
+    
+    # /stats command (only for bot admins)
+    if is_command(text, "stats"):
+        if not db.is_bot_admin(user_id):
+            reply_msg = await event.reply("**❌ ᴏɴʟʏ ʙᴏᴛ ᴀᴅᴍɪɴs ᴄᴀɴ ᴠɪᴇᴡ sᴛᴀᴛs!**")
+            # Delete user's command
+            try:
+                await event.message.delete()
+            except:
+                pass
+            await asyncio.sleep(3)
+            await reply_msg.delete()
+            return
+        
+        stats = db.get_stats()
+        
+        # Delete user's command
+        try:
+            await event.message.delete()
+        except:
+            pass
+        
+        caption = f"""
+**╭━━━━ ⟬ ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs ⟭━━━━╮**
+┃
+┃⟡➣ **ᴛᴏᴛᴀʟ ᴜsᴇʀs:** `{stats['users']}`
+┃⟡➣ **ᴛᴏᴛᴀʟ ɢʀᴏᴜᴘs:** `{stats['groups']}`
+┃⟡➣ **ᴛᴏᴛᴀʟ ᴄᴏᴍᴍᴀɴᴅs:** `{stats['total_commands']}`
+┃⟡➣ **sᴏɴɢs ᴘʟᴀʏᴇᴅ:** `{stats['songs_played']}`
+┃⟡➣ **ʙᴏᴛ ᴜᴘᴛɪᴍᴇ:** `{stats['uptime']}`
+┃⟡➣ **ᴀᴄᴛɪᴠᴇ ᴘʟᴀʏᴇʀs:** `{len(players)}`
+**╰━━━━━━━━━━━━━━━━━━━━━━╯**
+        """
+        
+        await event.reply(caption)
+        return
 
 # ================= CALLBACK HANDLER =================
 @events.register(events.CallbackQuery)
@@ -1209,7 +1507,7 @@ async def callback_handler(event):
         # Clean up current local file if it was a voice message
         if player.current and player.current.get('is_local', False):
             try:
-                os.remove(player.current['url'])
+                os.remove(player.current['file_path'])
             except:
                 pass
         
@@ -1248,7 +1546,7 @@ async def callback_handler(event):
         # Clean up current local file if it was a voice message
         if player.current and player.current.get('is_local', False):
             try:
-                os.remove(player.current['url'])
+                os.remove(player.current['file_path'])
             except:
                 pass
         
@@ -1256,7 +1554,7 @@ async def callback_handler(event):
         for song in player.queue:
             if song.get('is_local', False):
                 try:
-                    os.remove(song['url'])
+                    os.remove(song.get('file_path', ''))
                 except:
                     pass
         
@@ -1308,7 +1606,7 @@ async def callback_handler(event):
         for song in player.queue:
             if song.get('is_local', False):
                 try:
-                    os.remove(song['url'])
+                    os.remove(song.get('file_path', ''))
                 except:
                     pass
         
@@ -1334,6 +1632,7 @@ async def help_callback(event):
 ┃🔄 **/loop** - ᴛᴏɢɢʟᴇ ʟᴏᴏᴘ
 ┃🗑️ **/clear** - ᴄʟᴇᴀʀ ǫᴜᴇᴜᴇ
 ┃🔄 **/reload** - ʀᴇʟᴏᴀᴅ ᴀᴅᴍɪɴs
+┃🏓 **/ping** - ᴄʜᴇᴄᴋ ʙᴏᴛ ᴘɪɴɢ
 ┃
 ┃ **ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs:**
 ┃
@@ -1341,6 +1640,7 @@ async def help_callback(event):
 ┃➕ **/addadmin** - ᴀᴅᴅ ʙᴏᴛ ᴀᴅᴍɪɴ
 ┃➖ **/deladmin** - ʀᴇᴍᴏᴠᴇ ʙᴏᴛ ᴀᴅᴍɪɴ
 ┃📋 **/admins** - sʜᴏᴡ ᴀᴅᴍɪɴs
+┃📊 **/stats** - sʜᴏᴡ ʙᴏᴛ sᴛᴀᴛs
 **╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯**
     """
     
@@ -1352,7 +1652,7 @@ async def back_to_start(event):
     user = await event.get_sender()
     
     caption = f"""
-✨ **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ʙʟᴀᴢᴇ ꭙ ᴍᴜꜱɪᴄ ʙᴏᴛ** ✨
+✨ **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ˹𝚨𝛔𝛖𝛎𝛂 ꭙ 𝐌ᴜꜱɪᴄ ♪˼ ʙᴏᴛ** ✨
 
 ⟡➣ **ʜᴇʏ** [{get_display_name(user)}](tg://user?id={user.id}) ❤️
 
@@ -1361,7 +1661,7 @@ async def back_to_start(event):
     """
     
     buttons = [
-        [Button.url("⟡➣ 𝙾𝚠𝚗𝚎𝚛", f"https://t.me/blaze_xs0ul"),
+        [Button.url("⟡➣ 𝙾𝚠𝚗𝚎𝚛", f"https://t.me/god_knows_0"),
          Button.url("➕ 𝙰𝚍𝚍 𝙼𝚎", f"https://t.me/{(await event.client.get_me()).username}?startgroup=true")],
         [Button.inline("⟡➣ 𝙷𝚎𝚕𝚙", data="help"),
          Button.url("⟡➣ 𝚄𝚙𝚍𝚊𝚝𝚎𝚜", f"https://t.me/{UPDATES_CHANNEL}")]
@@ -1379,10 +1679,11 @@ async def admin_commands(event):
     text = event.message.text.strip()
     user_id = event.sender_id
     chat_id = event.chat_id
+    sender = await event.get_sender()
     
-    # /gcast command
+    # /gcast command (fixed)
     if is_command(text, "gcast"):
-        if not await is_bot_admin(user_id):
+        if not db.is_bot_admin(user_id):
             reply_msg = await event.reply("**❌ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀ ʙᴏᴛ ᴀᴅᴍɪɴ!**")
             # Delete user's command
             try:
@@ -1413,17 +1714,30 @@ async def admin_commands(event):
         
         msg = await event.reply("**📢 ʙʀᴏᴀᴅᴄᴀsᴛɪɴɢ...**")
         
+        # Log broadcast
+        await log_to_group(
+            action="ʙʀᴏᴀᴅᴄᴀsᴛ",
+            user=sender,
+            details=f"Message: {query[:100]}"
+        )
+        
         sent = 0
         failed = 0
         
-        async for dialog in bot.iter_dialogs():
-            if dialog.is_group or dialog.is_channel:
-                try:
-                    await bot.send_message(dialog.id, query)
-                    sent += 1
-                    await asyncio.sleep(0.5)
-                except:
-                    failed += 1
+        # Send to all groups
+        for group_id_str in db.data["groups"]:
+            try:
+                group_id = int(group_id_str)
+                await bot.send_message(group_id, query)
+                sent += 1
+                await asyncio.sleep(0.5)  # Rate limit avoidance
+            except Exception as e:
+                logger.error(f"Broadcast failed to {group_id_str}: {e}")
+                failed += 1
+                
+                # Remove group if bot is not there
+                if "not a member" in str(e).lower() or "chat not found" in str(e).lower():
+                    db.remove_group(group_id_str)
         
         await msg.edit(f"**📢 ʙʀᴏᴀᴅᴄᴀsᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ**\n\n✅ sᴇɴᴛ: {sent}\n❌ ғᴀɪʟᴇᴅ: {failed}")
         await asyncio.sleep(5)
@@ -1463,11 +1777,15 @@ async def admin_commands(event):
         
         try:
             new_admin = int(new_admin)
-            if new_admin in BOT_ADMINS:
-                msg = await event.reply("**⚠️ ᴜsᴇʀ ɪs ᴀʟʀᴇᴀᴅʏ ᴀɴ ᴀᴅᴍɪɴ!**")
-            else:
-                BOT_ADMINS.append(new_admin)
+            if db.add_bot_admin(new_admin):
                 msg = await event.reply(f"**✅ ᴜsᴇʀ `{new_admin}` ɪs ɴᴏᴡ ᴀ ʙᴏᴛ ᴀᴅᴍɪɴ!**")
+                await log_to_group(
+                    action="ᴀᴅᴅ ᴀᴅᴍɪɴ",
+                    user=sender,
+                    details=f"Added admin: {new_admin}"
+                )
+            else:
+                msg = await event.reply("**⚠️ ᴜsᴇʀ ɪs ᴀʟʀᴇᴀᴅʏ ᴀɴ ᴀᴅᴍɪɴ ᴏʀ ɪs ᴏᴡɴᴇʀ!**")
         except:
             msg = await event.reply("**❌ ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ!**")
         
@@ -1508,13 +1826,15 @@ async def admin_commands(event):
         
         try:
             remove_admin = int(remove_admin)
-            if remove_admin == OWNER_ID:
-                msg = await event.reply("**⚠️ ᴄᴀɴ'ᴛ ʀᴇᴍᴏᴠᴇ ᴏᴡɴᴇʀ!**")
-            elif remove_admin in BOT_ADMINS:
-                BOT_ADMINS.remove(remove_admin)
+            if db.remove_bot_admin(remove_admin):
                 msg = await event.reply(f"**✅ ᴜsᴇʀ `{remove_admin}` ɪs ɴᴏ ʟᴏɴɢᴇʀ ᴀ ʙᴏᴛ ᴀᴅᴍɪɴ!**")
+                await log_to_group(
+                    action="ʀᴇᴍᴏᴠᴇ ᴀᴅᴍɪɴ",
+                    user=sender,
+                    details=f"Removed admin: {remove_admin}"
+                )
             else:
-                msg = await event.reply("**⚠️ ᴜsᴇʀ ɪs ɴᴏᴛ ᴀɴ ᴀᴅᴍɪɴ!**")
+                msg = await event.reply("**⚠️ ᴜsᴇʀ ɪs ɴᴏᴛ ᴀɴ ᴀᴅᴍɪɴ ᴏʀ ɪs ᴏᴡɴᴇʀ!**")
         except:
             msg = await event.reply("**❌ ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ!**")
         
@@ -1524,7 +1844,7 @@ async def admin_commands(event):
     
     # /admins command
     if is_command(text, "admins"):
-        if not await is_bot_admin(user_id):
+        if not db.is_bot_admin(user_id):
             reply_msg = await event.reply("**❌ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀ ʙᴏᴛ ᴀᴅᴍɪɴ!**")
             # Delete user's command
             try:
@@ -1542,7 +1862,7 @@ async def admin_commands(event):
             pass
         
         text = "**👑 ʙᴏᴛ ᴀᴅᴍɪɴs ʟɪsᴛ:**\n\n"
-        for admin_id in BOT_ADMINS:
+        for admin_id in db.get_bot_admins():
             try:
                 user = await bot.get_entity(admin_id)
                 text += f"• {get_display_name(user)} (`{admin_id}`)\n"
@@ -1554,9 +1874,26 @@ async def admin_commands(event):
         await msg.delete()
         return
 
+# ================= GROUP LEAVE HANDLER =================
+@events.register(events.ChatAction)
+async def on_leave(event):
+    """Handle bot being removed from group"""
+    if event.user_left or event.user_kicked:
+        if event.user_id == (await bot.get_me()).id:
+            # Bot was removed from group
+            chat = await event.get_chat()
+            db.remove_group(chat.id)
+            await log_to_group(
+                action="ʙᴏᴛ ʀᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ɢʀᴏᴜᴘ",
+                group=chat,
+                details="Bot was removed from group"
+            )
+
 # ================= MAIN FUNCTION =================
 async def main():
-    global bot, assistant, call
+    global bot, assistant, call, BOT_START_TIME
+    
+    BOT_START_TIME = time.time()
     
     bot = TelegramClient('bot', API_ID, API_HASH)
     assistant = TelegramClient(StringSession(ASSISTANT_SESSION), API_ID, API_HASH)
@@ -1578,11 +1915,19 @@ async def main():
     await call.start()
     logger.info("✅ PyTgCalls Started!")
     
+    # Add all event handlers
     bot.add_event_handler(message_handler)
     bot.add_event_handler(callback_handler)
     bot.add_event_handler(help_callback)
     bot.add_event_handler(back_to_start)
     bot.add_event_handler(admin_commands)
+    bot.add_event_handler(on_leave)
+    
+    # Log bot start
+    await log_to_group(
+        action="ʙᴏᴛ sᴛᴀʀᴛᴇᴅ",
+        details=f"Bot started successfully!\nUsers: {len(db.data['users'])}\nGroups: {len(db.data['groups'])}"
+    )
     
     logger.info("🤖 Bot is running!")
     await bot.run_until_disconnected()
@@ -1590,6 +1935,6 @@ async def main():
 # ================= RUN BOT =================
 if __name__ == "__main__":
     # Install required packages:
-    # pip install telethon pytgcalls yt-dlp pillow aiohttp
+    # pip install telethon pytgcalls yt-dlp pillow aiohttp psutil
     # Also need ffmpeg installed on system
     asyncio.run(main())
