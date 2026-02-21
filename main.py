@@ -5,7 +5,8 @@ import yt_dlp
 from telethon import TelegramClient, events, Button
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.errors import UserAlreadyParticipantError, InviteHashExpiredError, FloodWaitError
-from telethon.tl.functions.channels import InviteToChannelRequest, ExportChatInviteRequest
+from telethon.tl.functions.messages import ExportChatInviteRequest
+from telethon.tl.functions.channels import InviteToChannelRequest
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument, InputMessagesFilterEmpty
 from telethon.utils import get_display_name
