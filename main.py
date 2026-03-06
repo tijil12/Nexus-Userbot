@@ -665,12 +665,12 @@ async def send_streaming_message(chat_id, song_info, is_video):
     """
     
     buttons = [
-        [Button.inline("⏸️", data=f"pause_{chat_id}"),
-         Button.inline("⏭️", data=f"skip_{chat_id}"),
-         Button.inline("⏹️", data=f"end_{chat_id}"),
-         Button.inline("🔄", data=f"loop_{chat_id}")],
-        [Button.inline("📋 ǫᴜᴇᴜᴇ", data=f"queue_{chat_id}"),
-         Button.inline("🗑️ ᴄʟᴇᴀʀ", data=f"clear_{chat_id}")]
+        [Button.inline("⏸️", data=f"pause_{chat_id}", style="primary"),
+         Button.inline("⏭️", data=f"skip_{chat_id}", style="primary"),
+         Button.inline("⏹️", data=f"end_{chat_id}", style="primary"),
+         Button.inline("🔄", data=f"loop_{chat_id}", style="primary")],
+        [Button.inline("📋 ǫᴜᴇᴜᴇ", data=f"queue_{chat_id}", style="primary"),
+         Button.inline("🗑️ ᴄʟᴇᴀʀ", data=f"clear_{chat_id}", style="primary")]
     ]
     
     # Download thumbnail only for non-voice messages
@@ -852,10 +852,10 @@ async def message_handler(event):
         """
         
         buttons = [
-            [Button.url("⟡➣ 𝙾𝚠𝚗𝚎𝚛", f"https://t.me/god_knows_0"),
-             Button.url("➕ 𝙰𝚍𝚍 𝙼𝚎", f"https://t.me/{(await event.client.get_me()).username}?startgroup=true")],
+            [Button.url("⟡➣ 𝙾𝚠𝚗𝚎𝚛", f"https://t.me/god_knows_0", style="primary"),
+             Button.url("➕ 𝙰𝚍𝚍 𝙼𝚎", f"https://t.me/{(await event.client.get_me()).username}?startgroup=true", style="primary")],
             [Button.inline("⟡➣ 𝙷𝚎𝚕𝚙", data="help", style="primary"),
-             Button.url("⟡➣ 𝚄𝚙𝚍𝚊𝚝𝚎𝚜", f"https://t.me/{UPDATES_CHANNEL}")]
+             Button.url("⟡➣ 𝚄𝚙𝚍𝚊𝚝𝚎𝚜", f"https://t.me/{UPDATES_CHANNEL}", style="primary")]
         ]
         
         await event.reply(file=WELCOME_IMAGE_URL, message=caption, buttons=buttons)
